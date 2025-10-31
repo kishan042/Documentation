@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Component Detachment Tracker</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+        --bg: #1e1e1e;
+        --fg: #ffffff;
+        --card: #262626;
+        --muted: #a0a0a0;
+        --accent: #18a0fb;
+        --divider: rgba(255, 255, 255, 0.1);
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--fg);
+        font-size: 12px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .summary-card {
+        display: flex;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 8px;
+        background: var(--card);
+        margin-bottom: 12px;
+      }
+
+      .summary-card .stat {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .stat-label {
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .stat-value {
+        font-size: 20px;
+        font-weight: 600;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      button:hover {
+        background: #0f8ad8;
+      }
+
+      .status {
+        font-size: 11px;
+        margin-bottom: 12px;
+        color: var(--muted);
+      }
+
+      .accordion {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 420px;
+        overflow-y: auto;
+      }
+
+      details {
+        background: var(--card);
+        border-radius: 8px;
+        padding: 0;
+      }
+
+      summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .page-name {
+        font-weight: 500;
+      }
+
+      .badge {
+        background: rgba(24, 160, 251, 0.15);
+        color: var(--accent);
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      ul {
+        margin: 0;
+        padding: 0 12px 12px 12px;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        gap: 8px;
+      }
+
+      .item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .item-name {
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .item-meta {
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .navigate-btn {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid rgba(24, 160, 251, 0.4);
+        padding: 4px 6px;
+        border-radius: 4px;
+      }
+
+      .navigate-btn:hover {
+        background: rgba(24, 160, 251, 0.12);
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 48px 24px;
+        color: var(--muted);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Detachment Tracker</h1>
+    <div class="summary-card" id="summary-card">
+      <div class="stat">
+        <span class="stat-label">Detached Components</span>
+        <span class="stat-value" id="component-count">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Detached Variables</span>
+        <span class="stat-value" id="variable-count">0</span>
+      </div>
+    </div>
+    <div class="actions">
+      <span class="status" id="status-text">Ready to scan.</span>
+      <button id="rescan-btn" type="button">Rescan</button>
+    </div>
+    <div class="accordion" id="accordion"></div>
+    <div class="empty-state hidden" id="empty-state">
+      No detached components or variables found.
+    </div>
+
+    <script>
+      const statusEl = document.getElementById('status-text');
+      const componentCountEl = document.getElementById('component-count');
+      const variableCountEl = document.getElementById('variable-count');
+      const accordionEl = document.getElementById('accordion');
+      const emptyStateEl = document.getElementById('empty-state');
+      const rescanBtn = document.getElementById('rescan-btn');
+
+      function setStatus(message, isLoading = false) {
+        if (!statusEl) {
+          return;
+        }
+        statusEl.textContent = message;
+        statusEl.style.color = isLoading ? '#18a0fb' : 'var(--muted)';
+      }
+
+      function requestScan() {
+        setStatus('Scanning for detached items…', true);
+        parent.postMessage({ pluginMessage: { type: 'scan' } }, '*');
+      }
+
+      function createListItem(item) {
+        const li = document.createElement('li');
+        const info = document.createElement('div');
+        info.className = 'item-info';
+
+        const name = document.createElement('span');
+        name.className = 'item-name';
+        name.textContent = item.name;
+
+        const meta = document.createElement('span');
+        meta.className = 'item-meta';
+        meta.textContent = item.type === 'component' ? 'Detached component' : `Detached variable (${item.metadata && item.metadata.property})`;
+
+        info.appendChild(name);
+        info.appendChild(meta);
+
+        const button = document.createElement('button');
+        button.className = 'navigate-btn';
+        button.type = 'button';
+        button.title = 'Reveal in canvas';
+        button.innerText = 'Target';
+        button.addEventListener('click', () => {
+          parent.postMessage({ pluginMessage: { type: 'navigate', nodeId: item.id } }, '*');
+        });
+
+        li.appendChild(info);
+        li.appendChild(button);
+        return li;
+      }
+
+      function renderAccordion(pageBreakdown) {
+        accordionEl.innerHTML = '';
+        pageBreakdown.forEach((page) => {
+          const details = document.createElement('details');
+          details.open = false;
+
+          const summary = document.createElement('summary');
+          const name = document.createElement('span');
+          name.className = 'page-name';
+          name.textContent = page.pageName;
+
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = page.items.length.toString();
+
+          summary.appendChild(name);
+          summary.appendChild(badge);
+          details.appendChild(summary);
+
+          const list = document.createElement('ul');
+          page.items.forEach((item) => list.appendChild(createListItem(item)));
+          details.appendChild(list);
+
+          accordionEl.appendChild(details);
+        });
+      }
+
+      function renderResults(data) {
+        const { totalDetachedComponents, totalDetachedVariables, pageBreakdown } = data;
+        componentCountEl.textContent = totalDetachedComponents.toString();
+        variableCountEl.textContent = totalDetachedVariables.toString();
+
+        if (!pageBreakdown || pageBreakdown.length === 0) {
+          accordionEl.classList.add('hidden');
+          emptyStateEl.classList.remove('hidden');
+          setStatus('No detached items detected.');
+          return;
+        }
+
+        emptyStateEl.classList.add('hidden');
+        accordionEl.classList.remove('hidden');
+        renderAccordion(pageBreakdown);
+        setStatus('Scan complete.');
+      }
+
+      function handleError(message) {
+        setStatus(message || 'An error occurred.', false);
+      }
+
+      window.onmessage = (event) => {
+        const message = event.data.pluginMessage;
+        if (!message) {
+          return;
+        }
+
+        switch (message.type) {
+          case 'ready':
+            requestScan();
+            break;
+          case 'results':
+            renderResults(message.data || { totalDetachedComponents: 0, totalDetachedVariables: 0, pageBreakdown: [] });
+            break;
+          case 'error':
+            handleError(message.message);
+            break;
+          default:
+            break;
+        }
+      };
+
+      rescanBtn.addEventListener('click', () => requestScan());
+
+      setStatus('Waiting for plugin…');
+    </script>
+  </body>
+</html>
+

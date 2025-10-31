@@ -1,0 +1,9 @@
+{
+  "name": "Component Detachment Tracker",
+  "id": "com.kishan.documentation.plugin",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "src/ui.html",
+  "editorType": ["figma"]
+}
+

@@ -1,0 +1,27 @@
+{
+  "name": "documentation-plugin",
+  "version": "0.1.0",
+  "description": "Figma plugin that surfaces detached components and variables with navigation UI.",
+  "main": "dist/code.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "figma",
+    "plugin",
+    "documentation",
+    "components"
+  ],
+  "author": "Kishan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kishan042/Documentation-Plugin.git"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.119.0",
+    "@types/node": "^24.9.2",
+    "typescript": "^3.9.10"
+  }
+}
