@@ -30,7 +30,8 @@
       }
 
       .summary-card {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
         padding: 12px;
         border-radius: 8px;
@@ -39,7 +40,6 @@
       }
 
       .summary-card .stat {
-        flex: 1;
         display: flex;
         flex-direction: column;
         gap: 4px;
@@ -125,41 +125,6 @@
         font-weight: 600;
       }
 
-      ul {
-        margin: 0;
-        padding: 0 12px 12px 12px;
-        list-style: none;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      li {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px;
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 6px;
-        gap: 8px;
-      }
-
-      .item-info {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-
-      .item-name {
-        font-size: 12px;
-        font-weight: 500;
-      }
-
-      .item-meta {
-        font-size: 10px;
-        color: var(--muted);
-      }
-
       .navigate-btn {
         background: transparent;
         color: var(--accent);
@@ -170,6 +135,58 @@
 
       .navigate-btn:hover {
         background: rgba(24, 160, 251, 0.12);
+      }
+
+      .component-group {
+        margin: 0 12px 12px;
+        padding: 12px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.03);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .component-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 500;
+      }
+
+      .instance-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .instance-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        gap: 8px;
+      }
+
+      .instance-name {
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .instance-meta {
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .instance-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
 
       .empty-state {
@@ -187,12 +204,12 @@
     <h1>Detachment Tracker</h1>
     <div class="summary-card" id="summary-card">
       <div class="stat">
-        <span class="stat-label">Detached Components</span>
-        <span class="stat-value" id="component-count">0</span>
+        <span class="stat-label">Instances</span>
+        <span class="stat-value" id="instance-count">0</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Detached Variables</span>
-        <span class="stat-value" id="variable-count">0</span>
+        <span class="stat-label">Unique Components</span>
+        <span class="stat-value" id="component-count">0</span>
       </div>
     </div>
     <div class="actions">
@@ -206,8 +223,8 @@
 
     <script>
       const statusEl = document.getElementById('status-text');
+      const instanceCountEl = document.getElementById('instance-count');
       const componentCountEl = document.getElementById('component-count');
-      const variableCountEl = document.getElementById('variable-count');
       const accordionEl = document.getElementById('accordion');
       const emptyStateEl = document.getElementById('empty-state');
       const rescanBtn = document.getElementById('rescan-btn');
@@ -225,18 +242,20 @@
         parent.postMessage({ pluginMessage: { type: 'scan' } }, '*');
       }
 
-      function createListItem(item) {
+      function createInstanceItem(instance) {
         const li = document.createElement('li');
+        li.className = 'instance-item';
+
         const info = document.createElement('div');
-        info.className = 'item-info';
+        info.className = 'instance-info';
 
         const name = document.createElement('span');
-        name.className = 'item-name';
-        name.textContent = item.name;
+        name.className = 'instance-name';
+        name.textContent = instance.name;
 
         const meta = document.createElement('span');
-        meta.className = 'item-meta';
-        meta.textContent = item.type === 'component' ? 'Detached component' : `Detached variable (${item.metadata && item.metadata.property})`;
+        meta.className = 'instance-meta';
+        meta.textContent = instance.componentName;
 
         info.appendChild(name);
         info.appendChild(meta);
@@ -247,12 +266,38 @@
         button.title = 'Reveal in canvas';
         button.innerText = 'Target';
         button.addEventListener('click', () => {
-          parent.postMessage({ pluginMessage: { type: 'navigate', nodeId: item.id } }, '*');
+          parent.postMessage({ pluginMessage: { type: 'navigate', nodeId: instance.id } }, '*');
         });
 
         li.appendChild(info);
         li.appendChild(button);
         return li;
+      }
+
+      function createComponentGroup(group) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'component-group';
+
+        const header = document.createElement('div');
+        header.className = 'component-header';
+
+        const title = document.createElement('span');
+        title.textContent = group.componentName;
+
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = group.instances.length.toString();
+
+        header.appendChild(title);
+        header.appendChild(badge);
+
+        const list = document.createElement('ul');
+        list.className = 'instance-list';
+        group.instances.forEach(instance => list.appendChild(createInstanceItem(instance)));
+
+        wrapper.appendChild(header);
+        wrapper.appendChild(list);
+        return wrapper;
       }
 
       function renderAccordion(pageBreakdown) {
@@ -268,29 +313,29 @@
 
           const badge = document.createElement('span');
           badge.className = 'badge';
-          badge.textContent = page.items.length.toString();
+          badge.textContent = page.instanceCount.toString();
 
           summary.appendChild(name);
           summary.appendChild(badge);
           details.appendChild(summary);
 
-          const list = document.createElement('ul');
-          page.items.forEach((item) => list.appendChild(createListItem(item)));
-          details.appendChild(list);
+          page.componentGroups.forEach(group => {
+            details.appendChild(createComponentGroup(group));
+          });
 
           accordionEl.appendChild(details);
         });
       }
 
       function renderResults(data) {
-        const { totalDetachedComponents, totalDetachedVariables, pageBreakdown } = data;
-        componentCountEl.textContent = totalDetachedComponents.toString();
-        variableCountEl.textContent = totalDetachedVariables.toString();
+        const { totalInstances, totalUniqueComponents, pageBreakdown } = data;
+        instanceCountEl.textContent = totalInstances.toString();
+        componentCountEl.textContent = totalUniqueComponents.toString();
 
         if (!pageBreakdown || pageBreakdown.length === 0) {
           accordionEl.classList.add('hidden');
           emptyStateEl.classList.remove('hidden');
-          setStatus('No detached items detected.');
+          setStatus('No component instances detected.');
           return;
         }
 
@@ -315,7 +360,7 @@
             requestScan();
             break;
           case 'results':
-            renderResults(message.data || { totalDetachedComponents: 0, totalDetachedVariables: 0, pageBreakdown: [] });
+            renderResults(message.data || { totalInstances: 0, totalUniqueComponents: 0, pageBreakdown: [] });
             break;
           case 'error':
             handleError(message.message);

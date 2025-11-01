@@ -1,12 +1,12 @@
 # Component Detachment Tracker
 
-Figma plugin that scans an entire file to surface detached component instances and missing variable bindings. Results appear in an accordion-based UI grouped by page with quick navigation controls.
+Figma plugin that scans an entire file to surface how many live component instances are in use, grouped by page and component. Results appear in an accordion-based UI with quick navigation controls.
 
 ## Features
 
-- Summaries of detached components and variables across the file
-- Accordion UI grouped by page with per-item navigation
-- One-click targeting to jump to the affected nodes
+- Summaries of total instances and unique components across the file
+- Accordion UI grouped by page and component with per-instance navigation
+- One-click targeting to jump to the selected node on canvas
 - Rescan button for iterative document reviews
 
 ## Getting Started
@@ -47,9 +47,9 @@ Figma plugin that scans an entire file to surface detached component instances a
 ## Roadmap
 
 - Export scan results to CSV
-- Filtering and search within detached items
+- Filtering and search within instance results
 - Thumbnail previews for faster identification
-- Batch reattachment helpers
+- Batch health checks for missing main components
 
 ## License
 

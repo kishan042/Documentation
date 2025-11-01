@@ -1,109 +1,101 @@
 figma.showUI(__html__, { width: 400, height: 600 });
 
-type DetachedType = 'component' | 'variable';
-
-interface DetachedItem {
+interface InstanceUsage {
   id: string;
   name: string;
-  type: DetachedType;
-  pageId: string;
-  pageName: string;
-  metadata?: Record<string, string>;
+  componentId: string;
+  componentKey?: string;
+  componentName: string;
+}
+
+interface ComponentGroup {
+  componentId: string;
+  componentKey?: string;
+  componentName: string;
+  instances: InstanceUsage[];
 }
 
 interface PageData {
   pageId: string;
   pageName: string;
-  items: DetachedItem[];
+  instanceCount: number;
+  componentGroups: ComponentGroup[];
 }
 
 interface SummaryData {
-  totalDetachedComponents: number;
-  totalDetachedVariables: number;
+  totalInstances: number;
+  totalUniqueComponents: number;
   pageBreakdown: PageData[];
 }
 
-function isInstanceNode(node: SceneNode): node is InstanceNode {
-  return node.type === 'INSTANCE';
-}
+function getInstancesForPage(page: PageNode): ComponentGroup[] {
+  const instances = page.findAll(node => node.type === 'INSTANCE') as InstanceNode[];
+  const groups = new Map<string, ComponentGroup>();
 
-function isDetachedComponent(node: SceneNode): node is InstanceNode {
-  return isInstanceNode(node) && node.mainComponent === null;
-}
-
-function extractDetachedVariables(node: SceneNode, page: PageNode): DetachedItem[] {
-  const items: DetachedItem[] = [];
-  if ('boundVariables' in node && node.boundVariables) {
-    const boundVars = node.boundVariables as unknown as Record<string, { id?: string } | null>;
-    for (const propertyName of Object.keys(boundVars)) {
-      const binding = boundVars[propertyName];
-      if (!binding) {
-        continue;
-      }
-      const variableId = typeof binding.id === 'string' ? binding.id : null;
-      if (!variableId) {
-        continue;
-      }
-      const variable = figma.variables && figma.variables.getVariableById(variableId);
-      if (!variable) {
-        items.push({
-          id: node.id,
-          name: `${node.name || node.type} · ${propertyName}`,
-          type: 'variable',
-          pageId: page.id,
-          pageName: page.name,
-          metadata: { property: propertyName }
-        });
-      }
+  for (const instance of instances) {
+    const main = instance.mainComponent;
+    if (!main) {
+      continue;
     }
-  }
-  return items;
-}
 
-function getDetachedItemsForPage(page: PageNode): DetachedItem[] {
-  const items: DetachedItem[] = [];
-  const nodes = page.findAll(() => true);
-  for (const node of nodes) {
-    if (isDetachedComponent(node)) {
-      items.push({
-        id: node.id,
-        name: node.name || 'Unnamed Instance',
-        type: 'component',
-        pageId: page.id,
-        pageName: page.name
+    const componentId = main.id;
+    const groupKey = main.key || componentId;
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        componentId,
+        componentKey: main.key || undefined,
+        componentName: main.name || 'Unnamed Component',
+        instances: []
       });
     }
 
-    const variableIssues = extractDetachedVariables(node, page);
-    if (variableIssues.length > 0) {
-      items.push.apply(items, variableIssues);
-    }
+    const group = groups.get(groupKey)!;
+    group.instances.push({
+      id: instance.id,
+      name: instance.name || 'Instance',
+      componentId,
+      componentKey: main.key || undefined,
+      componentName: main.name || 'Unnamed Component'
+    });
   }
-  return items;
+
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => a.componentName.localeCompare(b.componentName));
+  for (const group of sortedGroups) {
+    group.instances.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return sortedGroups;
 }
 
 function scanFile(): SummaryData {
   const pages = figma.root.children as readonly PageNode[];
   const pageBreakdown: PageData[] = [];
-  let totalDetachedComponents = 0;
-  let totalDetachedVariables = 0;
+  let totalInstances = 0;
+  const uniqueComponentKeys = new Set<string>();
 
   for (const page of pages) {
-    const pageItems = getDetachedItemsForPage(page);
-    if (pageItems.length > 0) {
-      totalDetachedComponents += pageItems.filter(item => item.type === 'component').length;
-      totalDetachedVariables += pageItems.filter(item => item.type === 'variable').length;
-      pageBreakdown.push({
-        pageId: page.id,
-        pageName: page.name,
-        items: pageItems
-      });
+    const componentGroups = getInstancesForPage(page);
+    if (componentGroups.length === 0) {
+      continue;
     }
+
+    const instanceCount = componentGroups.reduce((acc, group) => acc + group.instances.length, 0);
+    totalInstances += instanceCount;
+    componentGroups.forEach(group => {
+      uniqueComponentKeys.add(group.componentKey || group.componentId);
+    });
+
+    pageBreakdown.push({
+      pageId: page.id,
+      pageName: page.name,
+      instanceCount,
+      componentGroups
+    });
   }
 
   return {
-    totalDetachedComponents,
-    totalDetachedVariables,
+    totalInstances,
+    totalUniqueComponents: uniqueComponentKeys.size,
     pageBreakdown
   };
 }
@@ -113,7 +105,7 @@ function sendResultsToUI(data: SummaryData): void {
 }
 
 function notifyEmptyState(): void {
-  figma.ui.postMessage({ type: 'results', data: { totalDetachedComponents: 0, totalDetachedVariables: 0, pageBreakdown: [] } });
+  figma.ui.postMessage({ type: 'results', data: { totalInstances: 0, totalUniqueComponents: 0, pageBreakdown: [] } });
 }
 
 function handleScanRequest(): void {
